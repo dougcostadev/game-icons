@@ -1,3 +1,6 @@
 
 # DAC Configuration
 .dacrc.json
+
+# Build output
+dist/

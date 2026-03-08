@@ -3,7 +3,14 @@ import json
 import shutil
 import re
 import time
-from deep_translator import GoogleTranslator
+import sys
+
+try:
+    from deep_translator import GoogleTranslator
+    HAS_TRANSLATOR = True
+except ImportError:
+    HAS_TRANSLATOR = False
+    print("deep_translator não instalado. Rodando apenas em modo de cópia/cache.")
 
 SOURCE_DIR = 'items'
 OUTPUT_DIR = 'dist'
@@ -58,7 +65,7 @@ def main():
         if lang not in translations:
             translations[lang] = {}
 
-    for img in images:
+    for i, img in enumerate(images):
         name_without_ext = os.path.splitext(img)[0]
         api_data[name_without_ext] = {"original": img, "translations": {}}
         
@@ -66,18 +73,22 @@ def main():
         
         for lang in SUPPORTED_LANGS:
             if name_without_ext not in translations[lang]:
-                try:
-                    print(f"Traduzindo '{clean_name}' para {lang}...")
-                    time.sleep(0.5)
-                    translated = GoogleTranslator(source='auto', target=lang).translate(clean_name)
-                    if translated:
-                        translations[lang][name_without_ext] = translated
-                        changed = True
-                    else:
+                if HAS_TRANSLATOR:
+                    try:
+                        print(f"[{i+1}/{len(images)}] Traduzindo '{clean_name}' para {lang}...")
+                        time.sleep(1.0)
+                        translated = GoogleTranslator(source='auto', target=lang).translate(clean_name)
+                        if translated:
+                            translations[lang][name_without_ext] = translated
+                            changed = True
+                        else:
+                            translations[lang][name_without_ext] = clean_name
+                    except Exception as e:
+                        print(f"Erro ao traduzir '{clean_name}' para {lang}. Usando original. Erro: {e}")
                         translations[lang][name_without_ext] = clean_name
-                except Exception as e:
-                    print(f"Erro ao traduzir '{clean_name}': {e}")
+                else:
                     translations[lang][name_without_ext] = clean_name
+                    changed = True
             
             translated_name = translations[lang].get(name_without_ext, clean_name)
             slug = slugify(translated_name)
@@ -89,6 +100,10 @@ def main():
             src_path = os.path.join(SOURCE_DIR, img)
             dst_path = os.path.join(OUTPUT_DIR, lang, f"{slug}.png")
             shutil.copyfile(src_path, dst_path)
+
+        if changed and (i + 1) % 10 == 0:
+            save_translations(translations)
+            changed = False
 
     original_dist = os.path.join(OUTPUT_DIR, 'original')
     if os.path.exists(original_dist):
